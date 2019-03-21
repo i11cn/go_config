@@ -3,6 +3,7 @@ package config
 import (
 	"encoding/json"
 	"errors"
+	"reflect"
 	"strings"
 
 	"gopkg.in/yaml.v2"
@@ -187,7 +188,45 @@ func (cfg *Config) ToIni() string {
 	return ""
 }
 
+func get_array_item(i, v interface{}) error {
+	// TODO: 后续需要处理获取到数组的功能，包括比较严格的类型检查等
+	return errors.New("配置项为数组，暂时不支持获取数组类型")
+}
+
 func get_item(i, v interface{}) error {
+	value := reflect.ValueOf(v)
+	if value.Type().Kind() != reflect.Ptr {
+		return errors.New("只能接收到指针类型中， " + value.Type().String() + " 不能作为接收类型")
+	}
+	value = value.Elem()
+	switch t := i.(type) {
+	case []interface{}:
+		tmp := make([]interface{}, 0, len(t))
+		for _, c := range t {
+			if _, ok := c.(map[string]interface{}); !ok {
+				tmp = append(tmp, c)
+			}
+		}
+		if len(tmp) > 1 {
+			return get_array_item(tmp, v)
+		} else {
+			return get_item(tmp[0], v)
+		}
+	case map[string]interface{}:
+		return errors.New("没有找到指定的配置项")
+	case string:
+		use := StringConverter(t)
+		if res, err := use.ToType(value.Type()); err != nil {
+			return err
+		} else {
+			value.Set(*res)
+		}
+	default:
+		if reflect.TypeOf(i) != value.Type() {
+			return errors.New("配置项的数据类型和接收类型不符，配置项类型为 " + reflect.TypeOf(i).String() + " ,期望获取为 " + value.Type().String() + " 类型")
+		}
+		value.Set(reflect.ValueOf(i))
+	}
 	return nil
 }
 
