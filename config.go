@@ -1,17 +1,23 @@
 package config
 
 import (
+	"bytes"
 	"encoding/json"
-	"errors"
-	"reflect"
+	"fmt"
+	"os"
 	"strings"
 
+	option "github.com/i11cn/go_opt"
+
+	"github.com/sanity-io/litter"
 	"gopkg.in/yaml.v2"
 )
 
 type (
 	Config struct {
-		data map[string]interface{}
+		data  map[string]interface{}
+		env   map[string]string
+		flags *option.CommandParser
 	}
 )
 
@@ -21,153 +27,78 @@ func NewConfig() *Config {
 	return ret
 }
 
-func map_add_value1(m map[string]interface{}, value interface{}, path string, mpath ...string) {
-	if i, exist := m[path]; exist {
-		switch u := i.(type) {
-		case []interface{}:
-			m[path] = append(u, value)
-		case map[string]interface{}:
-			a := make([]interface{}, 0, 10)
-			a = append(a, u)
-			m[path] = append(a, value)
-		default:
-			a := make([]interface{}, 0, 10)
-			a = append(a, u)
-			m[path] = append(a, value)
-		}
-	} else {
-		m[path] = value
-	}
-}
-
-func map_add_value2(m map[string]interface{}, value interface{}, path string, mpath ...string) {
-	if i, exist := m[path]; exist {
-		switch u := i.(type) {
-		case []interface{}:
-			for _, t := range u {
-				if sub, ok := t.(map[string]interface{}); ok {
-					map_add_value(sub, value, mpath[0], mpath[1:]...)
-					return
-				}
-			}
-			sub := make(map[string]interface{})
-			m[path] = append(u, sub)
-			map_add_value(sub, value, mpath[0], mpath[1:]...)
-		case map[string]interface{}:
-			map_add_value(u, value, mpath[0], mpath[1:]...)
-		default:
-			a := make([]interface{}, 0, 10)
-			a = append(a, u)
-			sub := make(map[string]interface{})
-			m[path] = append(a, sub)
-			map_add_value(sub, value, mpath[0], mpath[1:]...)
-		}
-	} else {
-		sub := make(map[string]interface{})
-		m[path] = sub
-		map_add_value(sub, value, mpath[0], mpath[1:]...)
-	}
-}
-
-func map_add_value(m map[string]interface{}, value interface{}, path string, mpath ...string) {
-	if len(mpath) == 0 {
-		map_add_value1(m, value, path)
-	} else {
-		map_add_value2(m, value, path, mpath...)
-	}
-}
-
-func (cfg *Config) Add(value, path string, mpath ...string) *Config {
-	map_add_value(cfg.data, value, path, mpath...)
+func (cfg *Config) Add(value interface{}, path string, mpath ...string) *Config {
+	p, mp := regular_path(path, mpath...)
+	map_add_value(cfg.data, value, p, mp...)
 	return cfg
 }
 
-func map_set_value1(m map[string]interface{}, value interface{}, path string) {
-	if i, exist := m[path]; exist {
-		switch u := i.(type) {
-		case []interface{}:
-			var sub map[string]interface{}
-			var ok bool
-			for _, t := range u {
-				if sub, ok = t.(map[string]interface{}); ok {
-					return
-				}
-			}
-			if sub == nil {
-				m[path] = value
-			} else {
-				a := make([]interface{}, 0, 10)
-				a = append(a, sub)
-				m[path] = append(a, value)
-			}
-		case map[string]interface{}:
-			a := make([]interface{}, 0, 10)
-			a = append(a, u)
-			m[path] = append(a, value)
-		default:
-			m[path] = value
-		}
-	} else {
-		m[path] = value
-	}
-}
-
-func map_set_value2(m map[string]interface{}, value interface{}, path string, mpath ...string) {
-	if i, exist := m[path]; exist {
-		switch u := i.(type) {
-		case []interface{}:
-			for _, t := range u {
-				if sub, ok := t.(map[string]interface{}); ok {
-					map_set_value(sub, value, mpath[0], mpath[1:]...)
-					return
-				}
-			}
-			sub := make(map[string]interface{})
-			m[path] = append(u, sub)
-			map_set_value(sub, value, mpath[0], mpath[1:]...)
-		case map[string]interface{}:
-			map_set_value(u, value, mpath[0], mpath[1:]...)
-		default:
-			a := make([]interface{}, 0, 10)
-			a = append(a, u)
-			sub := make(map[string]interface{})
-			m[path] = append(a, sub)
-			map_set_value(sub, value, mpath[0], mpath[1:]...)
-		}
-	} else {
-		sub := make(map[string]interface{})
-		m[path] = sub
-		map_set_value(sub, value, mpath[0], mpath[1:]...)
-	}
-}
-
-func map_set_value(m map[string]interface{}, value interface{}, path string, mpath ...string) {
-	if len(mpath) == 0 {
-		map_set_value1(m, value, path)
-	} else {
-		map_set_value2(m, value, path, mpath...)
-	}
-}
-
-func (cfg *Config) Set(value, path string, mpath ...string) *Config {
-	map_set_value(cfg.data, value, path, mpath...)
+func (cfg *Config) Set(value interface{}, path string, mpath ...string) *Config {
+	p, mp := regular_path(path, mpath...)
+	map_set_value(cfg.data, value, p, mp...)
 	return cfg
 }
 
 func (cfg *Config) Delete(path string, mpath ...string) *Config {
+	regular_path(path, mpath...)
 	return cfg
 }
 
-func (cfg *Config) FromYaml(in []byte) (*Config, error) {
+func (cfg *Config) LoadYaml(in []byte) (*Config, error) {
+	data := make(map[interface{}]interface{})
+	var err error
+	if err = yaml.Unmarshal(in, data); err != nil {
+		data = nil
+	} else {
+		cfg.data = transform_map(data)
+	}
+	return cfg, err
+}
+
+func (cfg *Config) LoadYamlFile(file string) (*Config, error) {
+	if in, err := read_file_all(file); err != nil {
+		return nil, err
+	} else {
+		return cfg.LoadYaml(in)
+	}
+}
+
+func (cfg *Config) LoadJson(in []byte) (*Config, error) {
+	data := make(map[string]interface{})
+	var err error
+	if err = json.Unmarshal(in, data); err != nil {
+		data = nil
+	} else {
+		cfg.data = data
+	}
+	return cfg, err
+}
+
+func (cfg *Config) LoadJsonFile(file string) (*Config, error) {
+	if in, err := read_file_all(file); err != nil {
+		return nil, err
+	} else {
+		return cfg.LoadJson(in)
+	}
+}
+
+func (cfg *Config) LoadIni(in []byte) (*Config, error) {
+	data, err := LoadIni(in)
+	if err != nil {
+		return cfg, err
+	}
+	for k, v := range data {
+		cfg.Add(v, k)
+	}
 	return cfg, nil
 }
 
-func (cfg *Config) FromJson(in []byte) (*Config, error) {
-	return cfg, nil
-}
-
-func (cfg *Config) FromIni(in []byte) (*Config, error) {
-	return cfg, nil
+func (cfg *Config) LoadIniFile(file string) (*Config, error) {
+	if in, err := read_file_all(file); err != nil {
+		return nil, err
+	} else {
+		return cfg.LoadIni(in)
+	}
 }
 
 func (cfg *Config) ToYaml() string {
@@ -185,115 +116,98 @@ func (cfg *Config) ToJson() string {
 }
 
 func (cfg *Config) ToIni() string {
-	return ""
-}
-
-func get_array_item(i, v interface{}) error {
-	// TODO: 后续需要处理获取到数组的功能，包括比较严格的类型检查等
-	return errors.New("配置项为数组，暂时不支持获取数组类型")
-}
-
-func get_item(i, v interface{}) error {
-	value := reflect.ValueOf(v)
-	if value.Type().Kind() != reflect.Ptr {
-		return errors.New("只能接收到指针类型中， " + value.Type().String() + " 不能作为接收类型")
-	}
-	value = value.Elem()
-	switch t := i.(type) {
-	case []interface{}:
-		tmp := make([]interface{}, 0, len(t))
-		for _, c := range t {
-			if _, ok := c.(map[string]interface{}); !ok {
-				tmp = append(tmp, c)
-			}
-		}
-		if len(tmp) > 1 {
-			return get_array_item(tmp, v)
+	keys := cfg.Keys()
+	global := make([]string, 0, len(keys))
+	others := make(map[string][]string)
+	for _, k := range keys {
+		if strings.Index(k, ".") == -1 {
+			global = append(global, k)
 		} else {
-			return get_item(tmp[0], v)
-		}
-	case map[string]interface{}:
-		return errors.New("没有找到指定的配置项")
-	case string:
-		use := StringConverter(t)
-		if res, err := use.ToType(value.Type()); err != nil {
-			return err
-		} else {
-			value.Set(*res)
-		}
-	default:
-		if reflect.TypeOf(i) != value.Type() {
-			return errors.New("配置项的数据类型和接收类型不符，配置项类型为 " + reflect.TypeOf(i).String() + " ,期望获取为 " + value.Type().String() + " 类型")
-		}
-		value.Set(reflect.ValueOf(i))
-	}
-	return nil
-}
-
-func get(m map[string]interface{}, v interface{}, path string, mpath ...string) error {
-	if i, exist := m[path]; !exist {
-		return errors.New("没有找到指定的配置项")
-	} else if len(mpath) == 0 {
-		return get_item(i, v)
-	} else {
-		switch t := i.(type) {
-		case map[string]interface{}:
-			return get(t, v, mpath[0], mpath[1:]...)
-		case []interface{}:
-			for _, use := range t {
-				if sub, ok := use.(map[string]interface{}); ok {
-					return get(sub, v, mpath[0], mpath[1:]...)
-				}
+			parts := strings.SplitN(k, ".", 2)
+			if _, exists := others[parts[0]]; !exists {
+				others[parts[0]] = make([]string, 0, len(keys))
 			}
-			return errors.New("没有找到指定的配置项")
-		default:
-			return errors.New("没有找到指定的配置项")
+			others[parts[0]] = append(others[parts[0]], parts[1])
 		}
 	}
+	buf := &bytes.Buffer{}
+	if len(global) > 0 {
+		buf.WriteString(fmt.Sprintln("[Global]"))
+		for _, k := range global {
+			v := ""
+			cfg.Get(&v, k)
+			buf.WriteString(fmt.Sprintln(k, "=", v))
+		}
+		buf.WriteString(fmt.Sprintln())
+	}
+	if len(others) > 0 {
+		for p, ks := range others {
+			buf.WriteString(fmt.Sprintf("[%s]", p))
+			buf.WriteString(fmt.Sprintln())
+			for _, k := range ks {
+				v := ""
+				cfg.Get(&v, p, k)
+				buf.WriteString(fmt.Sprintln(k, "=", v))
+			}
+			buf.WriteString(fmt.Sprintln())
+		}
+	}
+	return buf.String()
 }
 
+// 以指定类型获取数据，尽可能的做类型转换的尝试
 func (cfg *Config) Get(v interface{}, path string, mpath ...string) error {
-	p := make([]string, 0, 10)
-	p = append(p, strings.Split(path, ".")...)
-	for _, mp := range mpath {
-		p = append(p, strings.Split(mp, ".")...)
-	}
-	return get(cfg.data, v, p[0], p[1:]...)
+	p, mp := regular_path(path, mpath...)
+	return get(cfg.data, v, p, mp...)
 }
 
-func get_keys(m map[string]interface{}, prefix string, keys []string) []string {
-	for k, v := range m {
-		key := k
-		if len(prefix) > 0 {
-			key = prefix + "." + k
-		}
-		switch t := v.(type) {
-		case []interface{}:
-			var sub map[string]interface{}
-			var self bool = false
-			for _, i := range t {
-				if s, ok := i.(map[string]interface{}); ok {
-					sub = s
-				} else {
-					self = true
-				}
-			}
-			if self {
-				keys = append(keys, key)
-			}
-			if sub != nil {
-				keys = get_keys(sub, key, keys)
-			}
-		case map[string]interface{}:
-			keys = get_keys(t, key, keys)
-		default:
-			keys = append(keys, key)
-		}
-	}
-	return keys
+// 以指定类型获取数据，要求必须为对应类型
+func (cfg *Config) GetAs(v interface{}, path string, mpath ...string) error {
+	p, mp := regular_path(path, mpath...)
+	return get(cfg.data, v, p, mp...)
+}
+
+// 以指定类型获取数据，尽可能的做类型转换的尝试
+func (cfg *Config) Convert(v interface{}, path string, mpath ...string) error {
+	p, mp := regular_path(path, mpath...)
+	return get(cfg.data, v, p, mp...)
 }
 
 func (cfg *Config) Keys() []string {
 	ret := make([]string, 0, 10)
 	return get_keys(cfg.data, "", ret)
+}
+
+func (cfg *Config) Test() {
+	// v1, v2 := get_parent_node(cfg.data, "test", "sub", "200")
+	v1, v2 := make_parent_node(cfg.data, "other", "server", "id")
+	litter.Dump(v1)
+	litter.Dump(v2)
+	// litter.Dump(add_map_to_node(v1, "native"))
+	litter.Dump(cfg.data)
+}
+
+func (cfg *Config) AddCommandFlag(name string) *Config {
+	if cfg.flags == nil {
+		cfg.flags, _ = option.NewParser()
+	}
+	return cfg
+}
+
+func (cfg *Config) AddEnv(name string) *Config {
+	if cfg.env == nil {
+		use := make(map[string]string)
+		env := os.Environ()
+		for _, v := range env {
+			p := strings.SplitN(v, "=", 2)
+			if len(p) == 2 {
+				use[p[0]] = p[1]
+			}
+		}
+		cfg.env = use
+	}
+	if env, exist := cfg.env[name]; exist {
+		cfg.Add(env, name)
+	}
+	return cfg
 }
