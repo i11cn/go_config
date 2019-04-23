@@ -44,18 +44,20 @@ func (cfg *Config) Add(value interface{}, path string, mpath ...string) *Config 
 	return cfg
 }
 
-// Set 给指定的Key上设置一个值，如果Key原来已有对应的值，则原有数据会被丢弃，设置为新值
+// Set 给指定的Key上设置一个值，如果Key原来已有对应的值，则原有数据会被丢弃，设置为新值。返回值为本Config对象，可以级联使用
 func (cfg *Config) Set(value interface{}, path string, mpath ...string) *Config {
 	p, mp := regular_path(path, mpath...)
 	map_set_value(cfg.data, value, p, mp...)
 	return cfg
 }
 
+// Delete 删除指定的Key，无论其下还有什么数据，均会被删除，包括子配置项。返回值为本Config对象，可以级联使用
 func (cfg *Config) Delete(path string, mpath ...string) *Config {
 	regular_path(path, mpath...)
 	return cfg
 }
 
+// LoadYaml 将输入数据作为Yaml格式解析，并且加载到本配置对象中，之前的数据会被清除
 func (cfg *Config) LoadYaml(in []byte) (*Config, error) {
 	data := make(map[interface{}]interface{})
 	var err error
@@ -67,6 +69,7 @@ func (cfg *Config) LoadYaml(in []byte) (*Config, error) {
 	return cfg, err
 }
 
+// LoadYamlFile 读取Yaml配置文件到本配置对象中，之前的数据会被清除
 func (cfg *Config) LoadYamlFile(file string) (*Config, error) {
 	if in, err := read_file_all(file); err != nil {
 		return nil, err
@@ -75,6 +78,7 @@ func (cfg *Config) LoadYamlFile(file string) (*Config, error) {
 	}
 }
 
+// LoadJson 将输入数据作为Json格式解析，并且加载到本配置对象中，之前的数据会被清除
 func (cfg *Config) LoadJson(in []byte) (*Config, error) {
 	data := make(map[string]interface{})
 	var err error
@@ -86,6 +90,7 @@ func (cfg *Config) LoadJson(in []byte) (*Config, error) {
 	return cfg, err
 }
 
+// LoadJsonFile 读取Json配置文件到本配置对象中，之前的数据会被清除
 func (cfg *Config) LoadJsonFile(file string) (*Config, error) {
 	if in, err := read_file_all(file); err != nil {
 		return nil, err
@@ -94,6 +99,9 @@ func (cfg *Config) LoadJsonFile(file string) (*Config, error) {
 	}
 }
 
+// LoadIni 将输入数据作为INI格式解析，并且加载到本配置对象中，之前的数据会被清除，由于INI文件中的Key不能重复，通常对于数组，
+// 都是在Key之后增加序号来实现的，因此此处提供一个参数key_preprocess来处理这一类配置项，默认截取所有Key之后的数字，
+// 如果需要自己处理，则需要自己传入key_preprocess
 func (cfg *Config) LoadIni(in []byte, key_preprocess ...func(string) string) (*Config, error) {
 	data, err := LoadIni(in)
 	if err != nil {
@@ -119,6 +127,7 @@ func (cfg *Config) LoadIni(in []byte, key_preprocess ...func(string) string) (*C
 	return cfg, nil
 }
 
+// LoadIniFile 读取INI配置文件到本配置对象中，之前的数据会被清除
 func (cfg *Config) LoadIniFile(file string, key_preprocess ...func(string) string) (*Config, error) {
 	if in, err := read_file_all(file); err != nil {
 		return nil, err
@@ -127,6 +136,7 @@ func (cfg *Config) LoadIniFile(file string, key_preprocess ...func(string) strin
 	}
 }
 
+// ToYaml 将本配置对象的内容导出为Yaml格式
 func (cfg *Config) ToYaml() string {
 	if d, err := yaml.Marshal(cfg.data); err == nil {
 		return string(d)
@@ -134,6 +144,7 @@ func (cfg *Config) ToYaml() string {
 	return ""
 }
 
+// ToJson 将本配置对象的内容导出为Json格式
 func (cfg *Config) ToJson() string {
 	if d, err := json.Marshal(cfg.data); err == nil {
 		return string(d)
@@ -141,7 +152,9 @@ func (cfg *Config) ToJson() string {
 	return ""
 }
 
+// ToIni 将本配置对象的内容导出为INI格式
 func (cfg *Config) ToIni() string {
+	// TODO: 需要继续处理数组的导出，INI不支持数组，需要在Key后增加序号
 	keys := cfg.Keys()
 	global := make([]string, 0, len(keys))
 	others := make(map[string][]string)
@@ -181,38 +194,27 @@ func (cfg *Config) ToIni() string {
 	return buf.String()
 }
 
-// 以指定类型获取数据，尽可能的做类型转换的尝试
+// Get 以指定类型获取数据，要求必须为对应类型，类型不匹配则会返回错误
 func (cfg *Config) Get(v interface{}, path string, mpath ...string) error {
+	// TODO: 还需要做严格的类型检查，现在检查规则比较混乱，并不严格
 	p, mp := regular_path(path, mpath...)
 	return get(cfg.data, v, p, mp...)
 }
 
-// 以指定类型获取数据，要求必须为对应类型
-func (cfg *Config) GetAs(v interface{}, path string, mpath ...string) error {
-	p, mp := regular_path(path, mpath...)
-	return get(cfg.data, v, p, mp...)
-}
-
-// 以指定类型获取数据，尽可能的做类型转换的尝试
+// Convert 以指定类型获取数据，尽可能的做类型转换的尝试，包括数值类型之间的转换，以及各种类型和字符串类型之间的转换
 func (cfg *Config) Convert(v interface{}, path string, mpath ...string) error {
+	// TODO: 数据类型转换的规则还需要加强，目前并没有做尽可能的尝试
 	p, mp := regular_path(path, mpath...)
 	return get(cfg.data, v, p, mp...)
 }
 
+// Keys 返回本配置对象中的所有配置项的名称
 func (cfg *Config) Keys() []string {
-	ret := make([]string, 0, 10)
+	ret := make([]string, 0)
 	return get_keys(cfg.data, "", ret)
 }
 
-func (cfg *Config) Test() {
-	// v1, v2 := get_parent_node(cfg.data, "test", "sub", "200")
-	v1, v2 := make_parent_node(cfg.data, "other", "server", "id")
-	litter.Dump(v1)
-	litter.Dump(v2)
-	// litter.Dump(add_map_to_node(v1, "native"))
-	litter.Dump(cfg.data)
-}
-
+// AddCommandFlag 从命令行中加载指定名称的参数，以Add的方式保存到本配置对象中
 func (cfg *Config) AddCommandFlag(name string) *Config {
 	if cfg.flags == nil {
 		cfg.flags, _ = option.NewParser()
@@ -220,6 +222,7 @@ func (cfg *Config) AddCommandFlag(name string) *Config {
 	return cfg
 }
 
+// AddEnv 从环境变量中加载指定名称的配置到本对象中，由于环境变量不能重复，因此如果数组类型，就需要有一定规则分割，可以通过参数delimiter指定分隔符
 func (cfg *Config) AddEnv(name string, delimiter ...string) *Config {
 	if cfg.env == nil {
 		use := make(map[string]string)
@@ -243,4 +246,13 @@ func (cfg *Config) AddEnv(name string, delimiter ...string) *Config {
 		}
 	}
 	return cfg
+}
+
+func (cfg *Config) Test() {
+	// v1, v2 := get_parent_node(cfg.data, "test", "sub", "200")
+	v1, v2 := make_parent_node(cfg.data, "other", "server", "id")
+	litter.Dump(v1)
+	litter.Dump(v2)
+	// litter.Dump(add_map_to_node(v1, "native"))
+	litter.Dump(cfg.data)
 }

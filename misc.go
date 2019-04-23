@@ -405,6 +405,7 @@ func get_item(i, v interface{}) error {
 	return nil
 }
 
+/*
 func get2(m map[string]interface{}, setter func(interface{}) error, path string, mpath ...string) error {
 	if i, exist := m[path]; !exist {
 		return errors.New("没有找到指定的配置项")
@@ -426,6 +427,7 @@ func get2(m map[string]interface{}, setter func(interface{}) error, path string,
 		}
 	}
 }
+*/
 
 func get(m map[string]interface{}, v interface{}, path string, mpath ...string) error {
 	if i, exist := m[path]; !exist {

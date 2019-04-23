@@ -73,7 +73,8 @@ func load_ini(io *bufio.Reader) (map[string]string, error) {
 	return ret, nil
 }
 
-func LoadFile(name string) (map[string]string, error) {
+// LoadFile 读取INI文件，将解析完成的内容以map形式返回，切记，INI不允许重复Key，如果文件中有重复Key，则只保留最后一个
+func LoadIniFile(name string) (map[string]string, error) {
 	file, err := os.Open(name)
 	if err != nil {
 		return nil, err
@@ -82,6 +83,7 @@ func LoadFile(name string) (map[string]string, error) {
 	return load_ini(bufio.NewReader(file))
 }
 
+// LoadIni 将输入以INI格式解析后，返回map
 func LoadIni(in []byte) (map[string]string, error) {
 	return load_ini(bufio.NewReader(bytes.NewBuffer(in)))
 }
