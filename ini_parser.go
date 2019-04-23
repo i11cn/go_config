@@ -59,11 +59,11 @@ func load_ini(io *bufio.Reader) (map[string]string, error) {
 
 			case is_kv(line):
 				k, v := get_kv(line)
-				if usec == "GLOBAL" {
-					ret[k] = v
-				} else {
-					ret[fmt.Sprintf("%s.%s", sec, k)] = v
+				key := k
+				if usec != "GLOBAL" {
+					key = fmt.Sprintf("%s.%s", sec, k)
 				}
+				ret[key] = v
 
 			default:
 				return nil, errors.New("格式不正确")

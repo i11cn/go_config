@@ -405,6 +405,28 @@ func get_item(i, v interface{}) error {
 	return nil
 }
 
+func get2(m map[string]interface{}, setter func(interface{}) error, path string, mpath ...string) error {
+	if i, exist := m[path]; !exist {
+		return errors.New("没有找到指定的配置项")
+	} else if len(mpath) == 0 {
+		return setter(i)
+	} else {
+		switch t := i.(type) {
+		case map[string]interface{}:
+			return get2(t, setter, mpath[0], mpath[1:]...)
+		case []interface{}:
+			for _, use := range t {
+				if sub, ok := use.(map[string]interface{}); ok {
+					return get2(sub, setter, mpath[0], mpath[1:]...)
+				}
+			}
+			return errors.New("没有找到指定的配置项")
+		default:
+			return errors.New("没有找到指定的配置项")
+		}
+	}
+}
+
 func get(m map[string]interface{}, v interface{}, path string, mpath ...string) error {
 	if i, exist := m[path]; !exist {
 		return errors.New("没有找到指定的配置项")
