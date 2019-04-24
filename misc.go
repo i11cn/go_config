@@ -191,129 +191,6 @@ func (s StringConverter) ToType(t reflect.Type) (*reflect.Value, error) {
 	}
 }
 
-func map_add_value1(m map[string]interface{}, value interface{}, path string, mpath ...string) {
-	if i, exist := m[path]; exist {
-		switch u := i.(type) {
-		case []interface{}:
-			m[path] = append(u, value)
-		case map[string]interface{}:
-			a := make([]interface{}, 0, 10)
-			a = append(a, u)
-			m[path] = append(a, value)
-		default:
-			a := make([]interface{}, 0, 10)
-			a = append(a, u)
-			m[path] = append(a, value)
-		}
-	} else {
-		m[path] = value
-	}
-}
-
-func map_add_value2(m map[string]interface{}, value interface{}, path string, mpath ...string) {
-	if i, exist := m[path]; exist {
-		switch u := i.(type) {
-		case []interface{}:
-			for _, t := range u {
-				if sub, ok := t.(map[string]interface{}); ok {
-					map_add_value(sub, value, mpath[0], mpath[1:]...)
-					return
-				}
-			}
-			sub := make(map[string]interface{})
-			m[path] = append(u, sub)
-			map_add_value(sub, value, mpath[0], mpath[1:]...)
-		case map[string]interface{}:
-			map_add_value(u, value, mpath[0], mpath[1:]...)
-		default:
-			a := make([]interface{}, 0, 10)
-			a = append(a, u)
-			sub := make(map[string]interface{})
-			m[path] = append(a, sub)
-			map_add_value(sub, value, mpath[0], mpath[1:]...)
-		}
-	} else {
-		sub := make(map[string]interface{})
-		m[path] = sub
-		map_add_value(sub, value, mpath[0], mpath[1:]...)
-	}
-}
-
-func map_add_value(m map[string]interface{}, value interface{}, path string, mpath ...string) {
-	if len(mpath) == 0 {
-		map_add_value1(m, value, path)
-	} else {
-		map_add_value2(m, value, path, mpath...)
-	}
-}
-
-func map_set_value1(m map[string]interface{}, value interface{}, path string) {
-	if i, exist := m[path]; exist {
-		switch u := i.(type) {
-		case []interface{}:
-			var sub map[string]interface{}
-			var ok bool
-			for _, t := range u {
-				if sub, ok = t.(map[string]interface{}); ok {
-					return
-				}
-			}
-			if sub == nil {
-				m[path] = value
-			} else {
-				a := make([]interface{}, 0, 10)
-				a = append(a, sub)
-				m[path] = append(a, value)
-			}
-		case map[string]interface{}:
-			a := make([]interface{}, 0, 10)
-			a = append(a, u)
-			m[path] = append(a, value)
-		default:
-			m[path] = value
-		}
-	} else {
-		m[path] = value
-	}
-}
-
-func map_set_value2(m map[string]interface{}, value interface{}, path string, mpath ...string) {
-	if i, exist := m[path]; exist {
-		switch u := i.(type) {
-		case []interface{}:
-			for _, t := range u {
-				if sub, ok := t.(map[string]interface{}); ok {
-					map_set_value(sub, value, mpath[0], mpath[1:]...)
-					return
-				}
-			}
-			sub := make(map[string]interface{})
-			m[path] = append(u, sub)
-			map_set_value(sub, value, mpath[0], mpath[1:]...)
-		case map[string]interface{}:
-			map_set_value(u, value, mpath[0], mpath[1:]...)
-		default:
-			a := make([]interface{}, 0, 10)
-			a = append(a, u)
-			sub := make(map[string]interface{})
-			m[path] = append(a, sub)
-			map_set_value(sub, value, mpath[0], mpath[1:]...)
-		}
-	} else {
-		sub := make(map[string]interface{})
-		m[path] = sub
-		map_set_value(sub, value, mpath[0], mpath[1:]...)
-	}
-}
-
-func map_set_value(m map[string]interface{}, value interface{}, path string, mpath ...string) {
-	if len(mpath) == 0 {
-		map_set_value1(m, value, path)
-	} else {
-		map_set_value2(m, value, path, mpath...)
-	}
-}
-
 func read_file_all(file string) ([]byte, error) {
 	f, err := os.Open(file)
 	if err != nil {
@@ -325,6 +202,49 @@ func read_file_all(file string) ([]byte, error) {
 		return nil, err
 	}
 	return ret, nil
+}
+
+func transform_map(in map[interface{}]interface{}) map[string]interface{} {
+	ret := make(map[string]interface{})
+	for k, v := range in {
+		key := fmt.Sprint(k)
+		switch t := v.(type) {
+		case map[interface{}]interface{}:
+			ret[key] = transform_map(t)
+		case []interface{}:
+			a := make([]interface{}, 0, len(t))
+			var sub map[string]interface{}
+			for _, n := range t {
+				if m, ok := n.(map[interface{}]interface{}); ok {
+					if sub == nil {
+						sub = transform_map(m)
+					} else {
+						for sk, sv := range transform_map(m) {
+							sub[sk] = sv
+						}
+					}
+				} else {
+					a = append(a, n)
+				}
+			}
+			if sub != nil {
+				a = append(a, sub)
+			}
+			ret[key] = a
+		default:
+			ret[key] = v
+		}
+	}
+	return ret
+}
+
+func regular_path(path string, mpath ...string) []string {
+	ret := make([]string, 0, 10)
+	ret = append(ret, strings.Split(path, ".")...)
+	for _, mp := range mpath {
+		ret = append(ret, strings.Split(mp, ".")...)
+	}
+	return ret
 }
 
 func get_array_item(i []interface{}, value reflect.Value) error {
@@ -341,6 +261,7 @@ func get_array_item(i []interface{}, value reflect.Value) error {
 	case "[]string":
 		for _, d := range i {
 			pos := value.Len()
+			fmt.Println(pos)
 			value.SetLen(pos + 1)
 			value.Index(pos).Set(reflect.ValueOf(fmt.Sprint(d)))
 		}
@@ -405,52 +326,6 @@ func get_item(i, v interface{}) error {
 	return nil
 }
 
-/*
-func get2(m map[string]interface{}, setter func(interface{}) error, path string, mpath ...string) error {
-	if i, exist := m[path]; !exist {
-		return errors.New("没有找到指定的配置项")
-	} else if len(mpath) == 0 {
-		return setter(i)
-	} else {
-		switch t := i.(type) {
-		case map[string]interface{}:
-			return get2(t, setter, mpath[0], mpath[1:]...)
-		case []interface{}:
-			for _, use := range t {
-				if sub, ok := use.(map[string]interface{}); ok {
-					return get2(sub, setter, mpath[0], mpath[1:]...)
-				}
-			}
-			return errors.New("没有找到指定的配置项")
-		default:
-			return errors.New("没有找到指定的配置项")
-		}
-	}
-}
-*/
-
-func get(m map[string]interface{}, v interface{}, path string, mpath ...string) error {
-	if i, exist := m[path]; !exist {
-		return errors.New("没有找到指定的配置项")
-	} else if len(mpath) == 0 {
-		return get_item(i, v)
-	} else {
-		switch t := i.(type) {
-		case map[string]interface{}:
-			return get(t, v, mpath[0], mpath[1:]...)
-		case []interface{}:
-			for _, use := range t {
-				if sub, ok := use.(map[string]interface{}); ok {
-					return get(sub, v, mpath[0], mpath[1:]...)
-				}
-			}
-			return errors.New("没有找到指定的配置项")
-		default:
-			return errors.New("没有找到指定的配置项")
-		}
-	}
-}
-
 func get_keys(m map[string]interface{}, prefix string, keys []string) []string {
 	for k, v := range m {
 		key := k
@@ -460,7 +335,7 @@ func get_keys(m map[string]interface{}, prefix string, keys []string) []string {
 		switch t := v.(type) {
 		case []interface{}:
 			var sub map[string]interface{}
-			var self bool = false
+			self := false
 			for _, i := range t {
 				if s, ok := i.(map[string]interface{}); ok {
 					sub = s
@@ -483,131 +358,112 @@ func get_keys(m map[string]interface{}, prefix string, keys []string) []string {
 	return keys
 }
 
-func get_node(m map[string]interface{}, path string, mpath ...string) interface{} {
-	node, exist := m[path]
-	if !exist {
-		return nil
-	}
-	if len(mpath) == 0 {
-		return node
-	}
-	switch t := node.(type) {
-	case []interface{}:
-		for _, v := range t {
-			if use, ok := v.(map[string]interface{}); ok {
-				return get_node(use, mpath[0], mpath[1:]...)
+func get_node(obj interface{}, path string, mpath ...string) (interface{}, error) {
+	switch t := obj.(type) {
+	case map[string]interface{}:
+		if v, exist := t[path]; exist {
+			if len(mpath) > 0 {
+				return get_node(v, mpath[0], mpath[1:]...)
+			} else {
+				return v, nil
 			}
 		}
-		return nil
-	case map[string]interface{}:
-		return get_node(t, mpath[0], mpath[1:]...)
-	default:
-		return nil
-	}
-}
-
-func get_parent_node(m map[string]interface{}, path string, mpath ...string) (map[string]interface{}, string) {
-	if len(mpath) == 0 {
-		return m, path
-	}
-	last := len(mpath) - 1
-	node := get_node(m, path, mpath[:last]...)
-	if node != nil {
-		switch t := node.(type) {
-		case []interface{}:
-			for _, v := range t {
-				if use, ok := v.(map[string]interface{}); ok {
-					return use, mpath[last]
+	case []interface{}:
+		for _, a := range t {
+			if m, ok := a.(map[string]interface{}); ok {
+				if v, exist := m[path]; exist {
+					if len(mpath) > 0 {
+						return get_node(v, mpath[0], mpath[1:]...)
+					} else {
+						return v, nil
+					}
 				}
 			}
-		case map[string]interface{}:
-			return t, mpath[last]
 		}
 	}
-	return nil, ""
+	return nil, errors.New("没有找到指定的配置项")
 }
 
-func add_map_to_node(m map[string]interface{}, path string) map[string]interface{} {
-	sub, exist := m[path]
-	if !exist {
+func inject_map(obj interface{}) (interface{}, map[string]interface{}) {
+	switch t := obj.(type) {
+	case map[string]interface{}:
+		return t, t
+	case []interface{}:
+		for _, a := range t {
+			if ret, ok := a.(map[string]interface{}); ok {
+				return t, ret
+			}
+		}
 		ret := make(map[string]interface{})
-		m[path] = ret
-		return ret
+		return append(t, ret), ret
+	default:
+		ret := make([]interface{}, 0, 10)
+		m := make(map[string]interface{})
+		ret = append(ret, m)
+		ret = append(ret, t)
+		return ret, m
 	}
-	switch t := sub.(type) {
+}
+
+func get_node_map(obj interface{}) map[string]interface{} {
+	switch t := obj.(type) {
 	case map[string]interface{}:
 		return t
 	case []interface{}:
-		for _, v := range t {
-			if use, ok := v.(map[string]interface{}); ok {
-				return use
+		for _, a := range t {
+			if ret, ok := a.(map[string]interface{}); ok {
+				return ret
 			}
 		}
-		a := make([]interface{}, 0, len(t)+1)
-		a = append(a, t...)
-		ret := make(map[string]interface{})
-		m[path] = append(a, ret)
-		return ret
 	default:
-		a := make([]interface{}, 0, 10)
-		a = append(a, t)
-		ret := make(map[string]interface{})
-		m[path] = append(a, ret)
-		return ret
+		return nil
 	}
+	return nil
 }
 
-func make_parent_node(m map[string]interface{}, path string, mpath ...string) (map[string]interface{}, string) {
-	if len(mpath) == 0 {
-		return m, path
-	}
-	last := len(mpath) - 1
-	sub := add_map_to_node(m, path)
-	for _, p := range mpath[:last] {
-		sub = add_map_to_node(sub, p)
-	}
-	return sub, mpath[last]
-}
-
-func transform_map(in map[interface{}]interface{}) map[string]interface{} {
-	ret := make(map[string]interface{})
-	for k, v := range in {
-		key := fmt.Sprint(k)
-		switch t := v.(type) {
-		case map[interface{}]interface{}:
-			ret[key] = transform_map(t)
-		case []interface{}:
-			a := make([]interface{}, 0, len(t))
-			var sub map[string]interface{}
-			for _, n := range t {
-				if m, ok := n.(map[interface{}]interface{}); ok {
-					if sub == nil {
-						sub = transform_map(m)
-					} else {
-						for sk, sv := range transform_map(m) {
-							sub[sk] = sv
-						}
-					}
-				} else {
-					a = append(a, n)
-				}
+func get_node_data(obj interface{}) interface{} {
+	switch t := obj.(type) {
+	case map[string]interface{}:
+		return nil
+	case []interface{}:
+		ret := make([]interface{}, 0, len(t))
+		for _, a := range t {
+			if _, ok := a.(map[string]interface{}); !ok {
+				ret = append(ret, a)
 			}
-			if sub != nil {
-				a = append(a, sub)
-			}
-			ret[key] = a
-		default:
-			ret[key] = v
+		}
+		if len(ret) != len(t) {
+			return ret
 		}
 	}
-	return ret
+	return obj
 }
 
-func regular_path(path string, mpath ...string) (string, []string) {
-	ret := make([]string, 0, 10)
-	ret = append(ret, strings.Split(path, ".")...)
-	for _, mp := range mpath {
-		ret = append(ret, strings.Split(mp, ".")...)
+func get_parent_map(obj interface{}, path string, mpath ...string) (map[string]interface{}, error) {
+	node := obj
+	if len(mpath) > 0 {
+		o, err := get_node(obj, path, mpath[0:len(mpath)-1]...)
+		if err != nil {
+			return nil, err
+		}
+		node = o
 	}
-	return ret[0], ret[1:]
+	ret := get_node_map(node)
+	if ret == nil {
+		return nil, errors.New("没有找到指定的配置项")
+	}
+	return ret, nil
+}
+
+func make_parent_map(obj interface{}, path string, mpath ...string) (interface{}, map[string]interface{}) {
+	ret, m := inject_map(obj)
+	if len(mpath) == 0 {
+		return ret, m
+	}
+	if i, exist := m[path]; exist {
+		m[path], m = make_parent_map(i, mpath[0], mpath[1:]...)
+	} else {
+		m[path], m = make_parent_map(make(map[string]interface{}), mpath[0], mpath[1:]...)
+	}
+	return ret, m
 }
