@@ -49,11 +49,11 @@ type (
 		// ToIni 将本配置对象的内容导出为INI格式
 		ToIni() string
 
-		// Get 以指定类型获取数据，要求必须为对应类型，类型不匹配则会返回错误
+		// Get 以指定类型获取数据，尽可能的做类型转换的尝试，包括数值类型之间的转换，以及各种类型和字符串类型之间的转换
 		Get(v interface{}, path string, mpath ...string) error
 
-		// Convert 以指定类型获取数据，尽可能的做类型转换的尝试，包括数值类型之间的转换，以及各种类型和字符串类型之间的转换
-		Convert(v interface{}, path string, mpath ...string) error
+		// GetAs 以指定类型获取数据，要求必须为对应类型，类型不匹配则会返回错误
+		GetAs(v interface{}, path string, mpath ...string) error
 
 		// Keys 返回本配置对象中的所有配置项的名称
 		Keys() []string
