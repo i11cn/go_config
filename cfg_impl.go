@@ -3,8 +3,10 @@ package config
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
+	"reflect"
 	"regexp"
 	"strings"
 
@@ -200,7 +202,10 @@ func (cfg *config_impl) Get(v interface{}, path string, mpath ...string) error {
 	if err != nil {
 		return err
 	}
-	return get_item(obj, v)
+	tc := func(i, v reflect.Value) error {
+		return errors.New("配置项的数据类型和接收类型不符，配置项类型为 " + i.Type().String() + " ,期望获取为 " + v.Type().String() + " 类型")
+	}
+	return get_item(obj, v, tc)
 }
 
 func (cfg *config_impl) Convert(v interface{}, path string, mpath ...string) error {
@@ -210,7 +215,26 @@ func (cfg *config_impl) Convert(v interface{}, path string, mpath ...string) err
 	if err != nil {
 		return err
 	}
-	return get_item(obj, v)
+	tc := func(i, v reflect.Value) error {
+		// TODO: 如果接收参数是string，把数据打印输出成string
+		if v.Type().String() == "string" {
+			v.SetString(fmt.Sprint(i))
+			return nil
+		}
+		// TODO: 如果源数据是string，通过StringConverter转换
+		if i.Type().String() == "string" {
+			use := StringConverter(i.String())
+			if res, err := use.ToType(v.Type()); err != nil {
+				return err
+			} else {
+				v.Set(*res)
+			}
+			return nil
+		}
+		// TODO: 如果原数据和接收数据都是数字（包括整数和浮点数），则尽可能转换
+		return errors.New("配置项的数据类型和接收类型不符，配置项类型为 " + i.Type().String() + " ,期望获取为 " + v.Type().String() + " 类型")
+	}
+	return get_item(obj, v, tc)
 }
 
 func (cfg *config_impl) Keys() []string {

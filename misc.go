@@ -247,7 +247,7 @@ func regular_path(path string, mpath ...string) []string {
 	return ret
 }
 
-func get_array_item(i []interface{}, value reflect.Value) error {
+func get_array_item(i []interface{}, value reflect.Value, tc func(i, v reflect.Value) error) error {
 	if value.Kind() != reflect.Array && value.Kind() != reflect.Slice {
 		return errors.New("需要数组来接收配置项数组，现有类型是 " + value.Type().String())
 	}
@@ -258,38 +258,26 @@ func get_array_item(i []interface{}, value reflect.Value) error {
 			value.SetLen(pos + 1)
 			value.Index(pos).Set(reflect.ValueOf(d))
 		}
-	case "[]string":
-		for _, d := range i {
-			pos := value.Len()
-			fmt.Println(pos)
-			value.SetLen(pos + 1)
-			value.Index(pos).Set(reflect.ValueOf(fmt.Sprint(d)))
-		}
 	default:
 		t := value.Type().Elem()
+		ori_len := value.Len()
 		for _, d := range i {
 			pos := value.Len()
 			value.SetLen(pos + 1)
-			switch reflect.TypeOf(d).String() {
-			case t.String():
-				value.Index(pos).Set(reflect.ValueOf(d))
-			case "string":
-				str, _ := d.(string)
-				sc := StringConverter(str)
-				uv, err := sc.ToType(t)
-				if err != nil {
-					return errors.New("接收配置项到数组 " + value.Type().String() + " 失败，其中的 " + reflect.TypeOf(d).String() + " 数据 " + str + " 不能转换成类型 " + t.String())
+			if reflect.TypeOf(d) != t {
+				if err := tc(reflect.ValueOf(d), value.Index(pos)); err != nil {
+					value.SetLen(ori_len)
+					return err
 				}
-				value.Index(pos).Set(*uv)
-			default:
-				return errors.New("接收配置项到数组 " + value.Type().String() + " 失败，其中的 " + reflect.TypeOf(d).String() + " 数据 " + fmt.Sprint(d) + " 不能转换成类型 " + t.String())
+			} else {
+				value.Index(pos).Set(reflect.ValueOf(d))
 			}
 		}
 	}
 	return nil
 }
 
-func get_item(i, v interface{}) error {
+func get_item(i, v interface{}, tc func(i, v reflect.Value) error) error {
 	value := reflect.ValueOf(v)
 	if value.Kind() != reflect.Ptr {
 		return errors.New("只能接收到指针类型中， " + value.Type().String() + " 不能作为接收类型")
@@ -304,21 +292,15 @@ func get_item(i, v interface{}) error {
 			}
 		}
 		if len(tmp) > 1 {
-			return get_array_item(tmp, value)
+			return get_array_item(tmp, value, tc)
 		} else {
-			return get_item(tmp[0], value)
+			return tc(reflect.ValueOf(tmp[0]), value)
 		}
 	case map[string]interface{}:
 		return errors.New("没有找到指定的配置项")
-	case string:
-		use := StringConverter(t)
-		if res, err := use.ToType(value.Type()); err != nil {
-			return err
-		} else {
-			value.Set(*res)
-		}
 	default:
 		if reflect.TypeOf(i) != value.Type() {
+			return tc(reflect.ValueOf(i), value)
 			return errors.New("配置项的数据类型和接收类型不符，配置项类型为 " + reflect.TypeOf(i).String() + " ,期望获取为 " + value.Type().String() + " 类型")
 		}
 		value.Set(reflect.ValueOf(i))
