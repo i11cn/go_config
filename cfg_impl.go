@@ -196,19 +196,6 @@ func (cfg *config_impl) ToIni() string {
 }
 
 func (cfg *config_impl) Get(v interface{}, path string, mpath ...string) error {
-	// TODO: 还需要做严格的类型检查，现在检查规则比较混乱，并不严格
-	paths := regular_path(path, mpath...)
-	obj, err := get_node(cfg.data, paths[0], paths[1:]...)
-	if err != nil {
-		return err
-	}
-	tc := func(i, v reflect.Value) error {
-		return errors.New("配置项的数据类型和接收类型不符，配置项类型为 " + i.Type().String() + " ,期望获取为 " + v.Type().String() + " 类型")
-	}
-	return get_item(obj, v, tc)
-}
-
-func (cfg *config_impl) Convert(v interface{}, path string, mpath ...string) error {
 	// TODO: 数据类型转换的规则还需要加强，目前并没有做尽可能的尝试
 	paths := regular_path(path, mpath...)
 	obj, err := get_node(cfg.data, paths[0], paths[1:]...)
@@ -232,6 +219,18 @@ func (cfg *config_impl) Convert(v interface{}, path string, mpath ...string) err
 			return nil
 		}
 		// TODO: 如果原数据和接收数据都是数字（包括整数和浮点数），则尽可能转换
+		return errors.New("配置项的数据类型和接收类型不符，配置项类型为 " + i.Type().String() + " ,期望获取为 " + v.Type().String() + " 类型")
+	}
+	return get_item(obj, v, tc)
+}
+func (cfg *config_impl) GetAs(v interface{}, path string, mpath ...string) error {
+	// TODO: 还需要做严格的类型检查，现在检查规则比较混乱，并不严格
+	paths := regular_path(path, mpath...)
+	obj, err := get_node(cfg.data, paths[0], paths[1:]...)
+	if err != nil {
+		return err
+	}
+	tc := func(i, v reflect.Value) error {
 		return errors.New("配置项的数据类型和接收类型不符，配置项类型为 " + i.Type().String() + " ,期望获取为 " + v.Type().String() + " 类型")
 	}
 	return get_item(obj, v, tc)
