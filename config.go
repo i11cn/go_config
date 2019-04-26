@@ -59,13 +59,16 @@ type (
 		Keys() []string
 
 		// AddCommandFlag 从命令行中加载指定名称的参数，以Add的方式保存到本配置对象中
-		AddCommandFlag(name string) Config
+		AddCommandFlag(name string) error
 
 		// AddEnv 从环境变量中加载指定名称的配置到本对象中，由于环境变量不能重复，因此如果数组类型，就需要有一定规则分割，可以通过参数delimiter指定分隔符
-		AddEnv(name string, delimiter ...string) Config
+		AddEnv(name string, delimiter ...string) error
 
 		// Clear 清除本对象中所有配置项
 		Clear() Config
+
+		// SubConfig 获取某一名称下的所有配置项，并且以Config接口的形式返回
+		SubConfig(path string, mpath ...string) Config
 	}
 )
 

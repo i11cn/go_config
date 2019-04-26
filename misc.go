@@ -1,7 +1,6 @@
 package config
 
 import (
-	"errors"
 	"fmt"
 	"io/ioutil"
 	"os"
@@ -117,7 +116,7 @@ func (s StringConverter) ToBool() (bool, error) {
 	case "FALSE", "NO", "N", "F", "0":
 		return false, nil
 	}
-	return false, errors.New("convert to bool failed")
+	return false, fmt.Errorf("convert to bool failed")
 }
 
 func (s StringConverter) to_int(t reflect.Type, l int) (*reflect.Value, error) {
@@ -167,7 +166,7 @@ func (s StringConverter) to_type(t reflect.Type) (*reflect.Value, error) {
 	case "bool":
 		ret, err = s.ToBool()
 	default:
-		return nil, errors.New("type " + t.String() + " not supported by string converterr")
+		return nil, fmt.Errorf("type %s not supported by string converterr", t.String())
 	}
 	if err != nil {
 		return nil, err
@@ -249,7 +248,7 @@ func regular_path(path string, mpath ...string) []string {
 
 func get_array_item(i []interface{}, value reflect.Value, tc func(i, v reflect.Value) error) error {
 	if value.Kind() != reflect.Array && value.Kind() != reflect.Slice {
-		return errors.New("需要数组来接收配置项数组，现有类型是 " + value.Type().String())
+		return fmt.Errorf("需要数组来接收配置项数组，现有类型是 %s", value.Type().String())
 	}
 	switch value.Type().String() {
 	case "[]interface {}":
@@ -280,7 +279,7 @@ func get_array_item(i []interface{}, value reflect.Value, tc func(i, v reflect.V
 func get_item(i, v interface{}, tc func(i, v reflect.Value) error) error {
 	value := reflect.ValueOf(v)
 	if value.Kind() != reflect.Ptr {
-		return errors.New("只能接收到指针类型中， " + value.Type().String() + " 不能作为接收类型")
+		return fmt.Errorf("只能接收到指针类型中， %s 不能作为接收类型", value.Type().String())
 	}
 	value = value.Elem()
 	switch t := i.(type) {
@@ -297,11 +296,11 @@ func get_item(i, v interface{}, tc func(i, v reflect.Value) error) error {
 			return tc(reflect.ValueOf(tmp[0]), value)
 		}
 	case map[string]interface{}:
-		return errors.New("没有找到指定的配置项")
+		return fmt.Errorf("没有找到指定的配置项")
 	default:
 		if reflect.TypeOf(i) != value.Type() {
 			return tc(reflect.ValueOf(i), value)
-			return errors.New("配置项的数据类型和接收类型不符，配置项类型为 " + reflect.TypeOf(i).String() + " ,期望获取为 " + value.Type().String() + " 类型")
+			return fmt.Errorf("配置项的数据类型和接收类型不符，配置项类型为 %s ,期望获取为 %s 类型", reflect.TypeOf(i).String(), value.Type().String())
 		}
 		value.Set(reflect.ValueOf(i))
 	}
@@ -363,7 +362,7 @@ func get_node(obj interface{}, path string, mpath ...string) (interface{}, error
 			}
 		}
 	}
-	return nil, errors.New("没有找到指定的配置项")
+	return nil, fmt.Errorf("没有找到指定的配置项")
 }
 
 func inject_map(obj interface{}) (interface{}, map[string]interface{}) {
@@ -432,7 +431,7 @@ func get_parent_map(obj interface{}, path string, mpath ...string) (map[string]i
 	}
 	ret := get_node_map(node)
 	if ret == nil {
-		return nil, errors.New("没有找到指定的配置项")
+		return nil, fmt.Errorf("没有找到指定的配置项")
 	}
 	return ret, nil
 }
