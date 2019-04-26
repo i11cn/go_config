@@ -3,7 +3,6 @@ package config
 import (
 	"bytes"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"os"
 	"reflect"
@@ -219,7 +218,7 @@ func (cfg *config_impl) Get(v interface{}, path string, mpath ...string) error {
 			return nil
 		}
 		// TODO: 如果原数据和接收数据都是数字（包括整数和浮点数），则尽可能转换
-		return errors.New("配置项的数据类型和接收类型不符，配置项类型为 " + i.Type().String() + " ,期望获取为 " + v.Type().String() + " 类型")
+		return fmt.Errorf("配置项的数据类型和接收类型不符，配置项类型为 %s ,期望获取为 %s 类型", i.Type().String(), v.Type().String())
 	}
 	return get_item(obj, v, tc)
 }
@@ -231,7 +230,7 @@ func (cfg *config_impl) GetAs(v interface{}, path string, mpath ...string) error
 		return err
 	}
 	tc := func(i, v reflect.Value) error {
-		return errors.New("配置项的数据类型和接收类型不符，配置项类型为 " + i.Type().String() + " ,期望获取为 " + v.Type().String() + " 类型")
+		return fmt.Errorf("配置项的数据类型和接收类型不符，配置项类型为 %s ,期望获取为 %s 类型", i.Type().String(), v.Type().String())
 	}
 	return get_item(obj, v, tc)
 }
@@ -242,14 +241,28 @@ func (cfg *config_impl) Keys() []string {
 	return ret
 }
 
-func (cfg *config_impl) AddCommandFlag(name string) Config {
+func (cfg *config_impl) AddCommandFlag(name string) error {
+	// TODO: 解析命令行参数的功能整合还有问题，需要再考虑考虑两个组件的功能
+	// 按照go_opt的设定，需要先Bind，那么如何处理重复Bind的问题？这个流程也不够易用
+	// 可以考虑在go_opt里增加自动Bind的方式，即GetFlag时，自动组织并Bind
 	if cfg.flags == nil {
-		cfg.flags, _ = option.NewParser()
+		flags, _ := option.NewParser()
+		if err := flags.Parse(); err != nil {
+			return err
+		}
+		cfg.flags = flags
 	}
-	return cfg
+	if cfg.flags != nil {
+		value := ""
+		if err := cfg.flags.GetFlag(name, &value); err != nil {
+			return err
+		}
+		cfg.Add(value, name)
+	}
+	return nil
 }
 
-func (cfg *config_impl) AddEnv(name string, delimiter ...string) Config {
+func (cfg *config_impl) AddEnv(name string, delimiter ...string) error {
 	if cfg.env == nil {
 		use := make(map[string]string)
 		env := os.Environ()
@@ -270,11 +283,24 @@ func (cfg *config_impl) AddEnv(name string, delimiter ...string) Config {
 		} else {
 			cfg.Add(env, name)
 		}
+	} else {
+		return fmt.Errorf("缺少指定的环境变量 %s", name)
 	}
-	return cfg
+	return nil
 }
 
 func (cfg *config_impl) Clear() Config {
 	cfg.data = nil
 	return cfg
+}
+
+func (cfg *config_impl) SubConfig(path string, mpath ...string) Config {
+	paths := regular_path(path, mpath...)
+	if node, err := get_node(cfg.data, paths[0], paths[1:]...); err != nil {
+		return nil
+	} else {
+		ret := &config_impl{}
+		ret.data = node
+		return ret
+	}
 }

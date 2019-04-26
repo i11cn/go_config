@@ -3,7 +3,6 @@ package config
 import (
 	"bufio"
 	"bytes"
-	"errors"
 	"fmt"
 	"os"
 	"strings"
@@ -46,7 +45,7 @@ func load_ini(io *bufio.Reader) (map[string]string, error) {
 	usec := strings.ToUpper(sec)
 	for l, more, err := io.ReadLine(); err == nil; l, more, err = io.ReadLine() {
 		if more {
-			return nil, errors.New("配置文件的单行数据过长")
+			return nil, fmt.Errorf("配置文件的单行数据过长")
 		}
 		if len(l) > 0 {
 			line := strings.TrimSpace(string(l))
@@ -66,7 +65,7 @@ func load_ini(io *bufio.Reader) (map[string]string, error) {
 				ret[key] = v
 
 			default:
-				return nil, errors.New("格式不正确")
+				return nil, fmt.Errorf("INI配置项的格式不正确")
 			}
 		}
 	}
