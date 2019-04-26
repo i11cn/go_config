@@ -62,12 +62,20 @@ func (cfg *config_impl) Delete(path string, mpath ...string) Config {
 }
 
 func (cfg *config_impl) LoadYaml(in []byte) (Config, error) {
-	data := make(map[interface{}]interface{})
+	// data := make(map[interface{}]interface{})
+	var data interface{}
 	var err error
-	if err = yaml.Unmarshal(in, data); err != nil {
+	if err = yaml.Unmarshal(in, &data); err != nil {
 		data = nil
 	} else {
-		cfg.data = transform_map(data)
+		switch t := data.(type) {
+		case []interface{}:
+			cfg.data = transform_array(t)
+		case map[interface{}]interface{}:
+			cfg.data = transform_map(t)
+		default:
+			cfg.data = data
+		}
 	}
 	return cfg, err
 }
