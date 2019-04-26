@@ -235,10 +235,17 @@ func transform_map(in map[interface{}]interface{}) map[string]interface{} {
 }
 
 func regular_path(path string, mpath ...string) []string {
-	ret := make([]string, 0, 10)
-	ret = append(ret, strings.Split(path, ".")...)
+	use := make([]string, 0, 10)
+	use = append(use, strings.Split(path, ".")...)
 	for _, mp := range mpath {
-		ret = append(ret, strings.Split(mp, ".")...)
+		use = append(use, strings.Split(mp, ".")...)
+	}
+	ret := make([]string, 0, len(use))
+	for _, p := range use {
+		s := strings.TrimSpace(p)
+		if len(s) > 0 {
+			ret = append(ret, s)
+		}
 	}
 	return ret
 }
@@ -289,7 +296,7 @@ func get_item(i, v interface{}, tc func(i, v reflect.Value) error) error {
 		}
 		if len(tmp) > 1 {
 			return get_array_item(tmp, value, tc)
-		} else {
+		} else if len(tmp) == 1 {
 			return tc(reflect.ValueOf(tmp[0]), value)
 		}
 	case map[string]interface{}:
@@ -304,36 +311,37 @@ func get_item(i, v interface{}, tc func(i, v reflect.Value) error) error {
 	return nil
 }
 
-func get_keys(m map[string]interface{}, prefix string, keys []string) []string {
-	for k, v := range m {
-		key := k
-		if len(prefix) > 0 {
-			key = prefix + "." + k
-		}
-		switch t := v.(type) {
-		case []interface{}:
-			var sub map[string]interface{}
-			self := false
-			for _, i := range t {
-				if s, ok := i.(map[string]interface{}); ok {
-					sub = s
-				} else {
-					self = true
+func get_keys(obj interface{}, prefix string) []string {
+	if obj == nil {
+		return []string{prefix}
+	}
+	ret := make([]string, 0, 10)
+	switch t := obj.(type) {
+	case []interface{}:
+		ret = append(ret, prefix)
+		for _, i := range t {
+			if m, ok := i.(map[string]interface{}); ok {
+				for k, v := range m {
+					key := k
+					if len(prefix) > 0 {
+						key = fmt.Sprintf("%s.%s", prefix, k)
+					}
+					ret = append(ret, get_keys(v, key)...)
 				}
 			}
-			if self {
-				keys = append(keys, key)
-			}
-			if sub != nil {
-				keys = get_keys(sub, key, keys)
-			}
-		case map[string]interface{}:
-			keys = get_keys(t, key, keys)
-		default:
-			keys = append(keys, key)
 		}
+	case map[string]interface{}:
+		for k, v := range t {
+			key := k
+			if len(prefix) > 0 {
+				key = fmt.Sprintf("%s.%s", prefix, k)
+			}
+			ret = append(ret, get_keys(v, key)...)
+		}
+	default:
+		ret = append(ret, prefix)
 	}
-	return keys
+	return ret
 }
 
 func get_node(obj interface{}, path string, mpath ...string) (interface{}, error) {
@@ -373,13 +381,12 @@ func inject_map(obj interface{}) (interface{}, map[string]interface{}) {
 			}
 		}
 		ret := make(map[string]interface{})
-		return append(t, ret), ret
+		t = append(reverse(t), ret)
+		return reverse(t), ret
 	default:
 		ret := make([]interface{}, 0, 10)
 		m := make(map[string]interface{})
-		ret = append(ret, m)
-		ret = append(ret, t)
-		return ret, m
+		return append(ret, m, t), m
 	}
 }
 
@@ -444,4 +451,27 @@ func make_parent_map(obj interface{}, path string, mpath ...string) (interface{}
 		m[path], m = make_parent_map(make(map[string]interface{}), mpath[0], mpath[1:]...)
 	}
 	return ret, m
+}
+
+func node_add_value(obj, v interface{}) interface{} {
+	if obj == nil {
+		return v
+	}
+	switch t := obj.(type) {
+	case []interface{}:
+		return append(t, v)
+	default:
+		a := make([]interface{}, 0, 10)
+		a = append(a, t)
+		return append(a, v)
+	}
+}
+
+func reverse(in []interface{}) []interface{} {
+	total := len(in)
+	l := total - 1
+	for i := 0; i < total/2; i++ {
+		in[i], in[l-i] = in[l-i], in[i]
+	}
+	return in
 }

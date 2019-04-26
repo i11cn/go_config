@@ -5,6 +5,8 @@
 //
 package config
 
+// TODO: 目前对于root节点是map的支持比较完整，但是对于root节点是数组的还不能支持，后续需要完善对数组的支持
+// TODO: 支持对于空键值的支持，空键值应该能够指向本身，这样就意味着regular_path能够返回空数组，现有所有代码都默认数组不空
 // TODO: 后续增加配置项变更后的触发功能
 
 type (
@@ -46,9 +48,6 @@ type (
 		// ToJson 将本配置对象的内容导出为Json格式
 		ToJson() string
 
-		// ToIni 将本配置对象的内容导出为INI格式
-		ToIni() string
-
 		// Get 以指定类型获取数据，尽可能的做类型转换的尝试，包括数值类型之间的转换，以及各种类型和字符串类型之间的转换
 		Get(v interface{}, path string, mpath ...string) error
 
@@ -69,6 +68,11 @@ type (
 
 		// SubConfig 获取某一名称下的所有配置项，并且以Config接口的形式返回
 		SubConfig(path string, mpath ...string) Config
+
+		// SubArray 获取某一数组配置项的子配置对象列表，即[]Config
+		//
+		// 注意返回的列表中会丢弃非数组和map的数据，这些数据构建成的Config对象无意义，也无法得到其值
+		SubArray(path string, mpath ...string) []Config
 	}
 )
 

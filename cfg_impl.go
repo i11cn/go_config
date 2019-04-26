@@ -1,7 +1,6 @@
 package config
 
 import (
-	"bytes"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -23,20 +22,15 @@ type (
 
 func (cfg *config_impl) Add(value interface{}, path string, mpath ...string) Config {
 	paths := regular_path(path, mpath...)
+	if len(paths) == 0 {
+		cfg.data = node_add_value(cfg.data, value)
+		return cfg
+	}
 	o, m := make_parent_map(cfg.data, paths[0], paths[1:]...)
 	cfg.data = o
 	name := paths[len(paths)-1]
 	if obj, exist := m[name]; exist {
-		switch t := obj.(type) {
-		case []interface{}:
-			t = append(t, value)
-			m[name] = t
-		default:
-			a := make([]interface{}, 0, 10)
-			a = append(a, t)
-			a = append(a, value)
-			m[name] = t
-		}
+		m[name] = node_add_value(obj, value)
 	} else {
 		m[name] = value
 	}
@@ -45,16 +39,24 @@ func (cfg *config_impl) Add(value interface{}, path string, mpath ...string) Con
 
 func (cfg *config_impl) Set(value interface{}, path string, mpath ...string) Config {
 	paths := regular_path(path, mpath...)
-	o, m := make_parent_map(cfg.data, paths[0], paths[1:]...)
-	cfg.data = o
-	m[paths[len(paths)-1]] = value
+	if len(paths) == 0 {
+		cfg.data = value
+	} else {
+		o, m := make_parent_map(cfg.data, paths[0], paths[1:]...)
+		cfg.data = o
+		m[paths[len(paths)-1]] = value
+	}
 	return cfg
 }
 
 func (cfg *config_impl) Delete(path string, mpath ...string) Config {
 	paths := regular_path(path, mpath...)
-	if m, err := get_parent_map(cfg.data, paths[0], paths[1:]...); err == nil && m != nil {
-		delete(m, paths[len(paths)-1])
+	if len(paths) == 0 {
+		cfg.data = nil
+	} else {
+		if m, err := get_parent_map(cfg.data, paths[0], paths[1:]...); err == nil && m != nil {
+			delete(m, paths[len(paths)-1])
+		}
 	}
 	return cfg
 }
@@ -150,56 +152,18 @@ func (cfg *config_impl) ToJson() string {
 	return ""
 }
 
-func (cfg *config_impl) ToIni() string {
-	if cfg.data == nil {
-		return ""
-	}
-	// TODO: 需要继续处理数组的导出，INI不支持数组，需要在Key后增加序号
-	keys := cfg.Keys()
-	global := make([]string, 0, len(keys))
-	others := make(map[string][]string)
-	for _, k := range keys {
-		if strings.Index(k, ".") == -1 {
-			global = append(global, k)
-		} else {
-			parts := strings.SplitN(k, ".", 2)
-			if _, exists := others[parts[0]]; !exists {
-				others[parts[0]] = make([]string, 0, len(keys))
-			}
-			others[parts[0]] = append(others[parts[0]], parts[1])
-		}
-	}
-	buf := &bytes.Buffer{}
-	if len(global) > 0 {
-		buf.WriteString(fmt.Sprintln("[Global]"))
-		for _, k := range global {
-			v := ""
-			cfg.Get(&v, k)
-			buf.WriteString(fmt.Sprintln(k, "=", v))
-		}
-		buf.WriteString(fmt.Sprintln())
-	}
-	if len(others) > 0 {
-		for p, ks := range others {
-			buf.WriteString(fmt.Sprintf("[%s]", p))
-			buf.WriteString(fmt.Sprintln())
-			for _, k := range ks {
-				v := ""
-				cfg.Get(&v, p, k)
-				buf.WriteString(fmt.Sprintln(k, "=", v))
-			}
-			buf.WriteString(fmt.Sprintln())
-		}
-	}
-	return buf.String()
-}
-
 func (cfg *config_impl) Get(v interface{}, path string, mpath ...string) error {
-	// TODO: 数据类型转换的规则还需要加强，目前并没有做尽可能的尝试
+	if cfg.data == nil {
+		return fmt.Errorf("Config 对象还未初始化，不包含任何数据")
+	}
 	paths := regular_path(path, mpath...)
-	obj, err := get_node(cfg.data, paths[0], paths[1:]...)
-	if err != nil {
-		return err
+	obj := cfg.data
+	if len(paths) > 0 {
+		var err error
+		obj, err = get_node(cfg.data, paths[0], paths[1:]...)
+		if err != nil {
+			return err
+		}
 	}
 	tc := func(i, v reflect.Value) error {
 		// TODO: 如果接收参数是string，把数据打印输出成string
@@ -211,7 +175,7 @@ func (cfg *config_impl) Get(v interface{}, path string, mpath ...string) error {
 		if i.Type().String() == "string" {
 			use := StringConverter(i.String())
 			if res, err := use.ToType(v.Type()); err != nil {
-				return err
+				return fmt.Errorf("配置项 \"%s\" 不能转换成 %s", i.String(), v.Type().String())
 			} else {
 				v.Set(*res)
 			}
@@ -223,11 +187,17 @@ func (cfg *config_impl) Get(v interface{}, path string, mpath ...string) error {
 	return get_item(obj, v, tc)
 }
 func (cfg *config_impl) GetAs(v interface{}, path string, mpath ...string) error {
-	// TODO: 还需要做严格的类型检查，现在检查规则比较混乱，并不严格
+	if cfg.data == nil {
+		return fmt.Errorf("Config 对象还未初始化，不包含任何数据")
+	}
 	paths := regular_path(path, mpath...)
-	obj, err := get_node(cfg.data, paths[0], paths[1:]...)
-	if err != nil {
-		return err
+	obj := cfg.data
+	if len(paths) > 0 {
+		var err error
+		obj, err = get_node(cfg.data, paths[0], paths[1:]...)
+		if err != nil {
+			return err
+		}
 	}
 	tc := func(i, v reflect.Value) error {
 		return fmt.Errorf("配置项的数据类型和接收类型不符，配置项类型为 %s ,期望获取为 %s 类型", i.Type().String(), v.Type().String())
@@ -236,8 +206,18 @@ func (cfg *config_impl) GetAs(v interface{}, path string, mpath ...string) error
 }
 
 func (cfg *config_impl) Keys() []string {
-	ret := make([]string, 0)
-	// return get_keys(cfg.data, "", ret)
+	if cfg.data == nil {
+		return []string{}
+	}
+	keys := get_keys(cfg.data, "")
+	ret := make([]string, 0, len(keys))
+	km := make(map[string]string)
+	for _, k := range keys {
+		if _, exist := km[k]; !exist {
+			km[k] = k
+			ret = append(ret, k)
+		}
+	}
 	return ret
 }
 
@@ -295,12 +275,43 @@ func (cfg *config_impl) Clear() Config {
 }
 
 func (cfg *config_impl) SubConfig(path string, mpath ...string) Config {
+	if cfg.data == nil {
+		return nil
+	}
 	paths := regular_path(path, mpath...)
+	if len(paths) == 0 {
+		return cfg
+	}
 	if node, err := get_node(cfg.data, paths[0], paths[1:]...); err != nil {
 		return nil
 	} else {
 		ret := &config_impl{}
 		ret.data = node
 		return ret
+	}
+}
+
+func (cfg *config_impl) SubArray(path string, mpath ...string) []Config {
+	if cfg.data == nil {
+		return nil
+	}
+	paths := regular_path(path, mpath...)
+	if len(paths) == 0 {
+		return nil
+	}
+	if node, err := get_node(cfg.data, paths[0], paths[1:]...); err != nil {
+		return nil
+	} else {
+		if a, ok := node.([]interface{}); ok {
+			ret := make([]Config, 0, len(a))
+			for _, v := range a {
+				switch t := v.(type) {
+				case map[string]interface{}, []interface{}:
+					ret = append(ret, &config_impl{data: t})
+				}
+			}
+			return ret
+		}
+		return nil
 	}
 }
