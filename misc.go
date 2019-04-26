@@ -203,6 +203,21 @@ func read_file_all(file string) ([]byte, error) {
 	return ret, nil
 }
 
+func transform_array(in []interface{}) []interface{} {
+	ret := make([]interface{}, 0, len(in))
+	for _, v := range in {
+		switch t := v.(type) {
+		case map[interface{}]interface{}:
+			ret = append(ret, transform_map(t))
+		case []interface{}:
+			ret = append(ret, transform_array(t))
+		default:
+			ret = append(ret, t)
+		}
+	}
+	return ret
+}
+
 func transform_map(in map[interface{}]interface{}) map[string]interface{} {
 	ret := make(map[string]interface{})
 	for k, v := range in {
@@ -211,25 +226,7 @@ func transform_map(in map[interface{}]interface{}) map[string]interface{} {
 		case map[interface{}]interface{}:
 			ret[key] = transform_map(t)
 		case []interface{}:
-			a := make([]interface{}, 0, len(t))
-			var sub map[string]interface{}
-			for _, n := range t {
-				if m, ok := n.(map[interface{}]interface{}); ok {
-					if sub == nil {
-						sub = transform_map(m)
-					} else {
-						for sk, sv := range transform_map(m) {
-							sub[sk] = sv
-						}
-					}
-				} else {
-					a = append(a, n)
-				}
-			}
-			if sub != nil {
-				a = append(a, sub)
-			}
-			ret[key] = a
+			ret[key] = transform_array(t)
 		default:
 			ret[key] = v
 		}
