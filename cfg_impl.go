@@ -20,8 +20,8 @@ type (
 	}
 )
 
-func (cfg *config_impl) Add(value interface{}, path string, mpath ...string) Config {
-	paths := regular_path(path, mpath...)
+func (cfg *config_impl) Add(value interface{}, path ...string) Config {
+	paths := regular_path("", path...)
 	if len(paths) == 0 {
 		cfg.data = node_add_value(cfg.data, value)
 		return cfg
@@ -37,8 +37,8 @@ func (cfg *config_impl) Add(value interface{}, path string, mpath ...string) Con
 	return cfg
 }
 
-func (cfg *config_impl) Set(value interface{}, path string, mpath ...string) Config {
-	paths := regular_path(path, mpath...)
+func (cfg *config_impl) Set(value interface{}, path ...string) Config {
+	paths := regular_path("", path...)
 	if len(paths) == 0 {
 		cfg.data = value
 	} else {
@@ -49,8 +49,8 @@ func (cfg *config_impl) Set(value interface{}, path string, mpath ...string) Con
 	return cfg
 }
 
-func (cfg *config_impl) Delete(path string, mpath ...string) Config {
-	paths := regular_path(path, mpath...)
+func (cfg *config_impl) Delete(path ...string) Config {
+	paths := regular_path("", path...)
 	if len(paths) == 0 {
 		cfg.data = nil
 	} else {
@@ -62,7 +62,6 @@ func (cfg *config_impl) Delete(path string, mpath ...string) Config {
 }
 
 func (cfg *config_impl) LoadYaml(in []byte) (Config, error) {
-	// data := make(map[interface{}]interface{})
 	var data interface{}
 	var err error
 	if err = yaml.Unmarshal(in, &data); err != nil {
@@ -160,11 +159,11 @@ func (cfg *config_impl) ToJson() string {
 	return ""
 }
 
-func (cfg *config_impl) Get(v interface{}, path string, mpath ...string) error {
+func (cfg *config_impl) Get(v interface{}, path ...string) error {
 	if cfg.data == nil {
 		return fmt.Errorf("Config 对象还未初始化，不包含任何数据")
 	}
-	paths := regular_path(path, mpath...)
+	paths := regular_path("", path...)
 	obj := cfg.data
 	if len(paths) > 0 {
 		var err error
@@ -194,11 +193,11 @@ func (cfg *config_impl) Get(v interface{}, path string, mpath ...string) error {
 	}
 	return get_item(obj, v, tc)
 }
-func (cfg *config_impl) GetAs(v interface{}, path string, mpath ...string) error {
+func (cfg *config_impl) GetAs(v interface{}, path ...string) error {
 	if cfg.data == nil {
 		return fmt.Errorf("Config 对象还未初始化，不包含任何数据")
 	}
-	paths := regular_path(path, mpath...)
+	paths := regular_path("", path...)
 	obj := cfg.data
 	if len(paths) > 0 {
 		var err error
@@ -282,11 +281,11 @@ func (cfg *config_impl) Clear() Config {
 	return cfg
 }
 
-func (cfg *config_impl) SubConfig(path string, mpath ...string) Config {
+func (cfg *config_impl) SubConfig(path ...string) Config {
 	if cfg.data == nil {
 		return nil
 	}
-	paths := regular_path(path, mpath...)
+	paths := regular_path("", path...)
 	if len(paths) == 0 {
 		return cfg
 	}
@@ -299,27 +298,28 @@ func (cfg *config_impl) SubConfig(path string, mpath ...string) Config {
 	}
 }
 
-func (cfg *config_impl) SubArray(path string, mpath ...string) []Config {
+func (cfg *config_impl) SubArray(path ...string) []Config {
 	if cfg.data == nil {
 		return nil
 	}
-	paths := regular_path(path, mpath...)
-	if len(paths) == 0 {
-		return nil
-	}
-	if node, err := get_node(cfg.data, paths[0], paths[1:]...); err != nil {
-		return nil
-	} else {
-		if a, ok := node.([]interface{}); ok {
-			ret := make([]Config, 0, len(a))
-			for _, v := range a {
-				switch t := v.(type) {
-				case map[string]interface{}, []interface{}:
-					ret = append(ret, &config_impl{data: t})
-				}
-			}
-			return ret
+	paths := regular_path("", path...)
+	node := cfg.data
+	if len(paths) > 0 {
+		if use, err := get_node(cfg.data, paths[0], paths[1:]...); err != nil {
+			return nil
+		} else {
+			node = use
 		}
-		return nil
 	}
+	if a, ok := node.([]interface{}); ok {
+		ret := make([]Config, 0, len(a))
+		for _, v := range a {
+			switch t := v.(type) {
+			case map[string]interface{}, []interface{}:
+				ret = append(ret, &config_impl{data: t})
+			}
+		}
+		return ret
+	}
+	return nil
 }

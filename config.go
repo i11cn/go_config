@@ -14,13 +14,13 @@ type (
 		// Add 给指定的Key上增加一个值，如果Key原来已有对应的值，则扩展成数组存放。返回值为本Config对象，可以级联使用，例如:
 		//
 		// config.Add("value", "key").Add("value2", "Key")
-		Add(value interface{}, path string, mpath ...string) Config
+		Add(value interface{}, path ...string) Config
 
 		// Set 给指定的Key上设置一个值，如果Key原来已有对应的值，则原有数据会被丢弃，设置为新值。返回值为本Config对象，可以级联使用
-		Set(value interface{}, path string, mpath ...string) Config
+		Set(value interface{}, path ...string) Config
 
 		// Delete 删除指定的Key，无论其下还有什么数据，均会被删除，包括子配置项。返回值为本Config对象，可以级联使用
-		Delete(path string, mpath ...string) Config
+		Delete(path ...string) Config
 
 		// LoadYaml 将输入数据作为Yaml格式解析，并且加载到本配置对象中，之前的数据会被清除
 		LoadYaml(in []byte) (Config, error)
@@ -49,10 +49,10 @@ type (
 		ToJson() string
 
 		// Get 以指定类型获取数据，尽可能的做类型转换的尝试，包括数值类型之间的转换，以及各种类型和字符串类型之间的转换
-		Get(v interface{}, path string, mpath ...string) error
+		Get(v interface{}, path ...string) error
 
 		// GetAs 以指定类型获取数据，要求必须为对应类型，类型不匹配则会返回错误
-		GetAs(v interface{}, path string, mpath ...string) error
+		GetAs(v interface{}, path ...string) error
 
 		// Keys 返回本配置对象中的所有配置项的名称
 		Keys() []string
@@ -67,12 +67,12 @@ type (
 		Clear() Config
 
 		// SubConfig 获取某一名称下的所有配置项，并且以Config接口的形式返回
-		SubConfig(path string, mpath ...string) Config
+		SubConfig(path ...string) Config
 
 		// SubArray 获取某一数组配置项的子配置对象列表，即[]Config
 		//
 		// 注意返回的列表中会丢弃非数组和map的数据，这些数据构建成的Config对象无意义，也无法得到其值
-		SubArray(path string, mpath ...string) []Config
+		SubArray(path ...string) []Config
 	}
 )
 
