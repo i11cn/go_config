@@ -3,6 +3,7 @@ package config
 import (
 	"encoding/json"
 	"fmt"
+	"io/ioutil"
 	"os"
 	"reflect"
 	"regexp"
@@ -82,7 +83,7 @@ func (cfg *config_impl) LoadYaml(in []byte) (Config, error) {
 }
 
 func (cfg *config_impl) LoadYamlFile(file string) (Config, error) {
-	if in, err := misc.ReadFileAll(file); err != nil {
+	if in, err := ioutil.ReadFile(file); err != nil {
 		return nil, err
 	} else {
 		return cfg.LoadYaml(in)
@@ -101,7 +102,7 @@ func (cfg *config_impl) LoadJson(in []byte) (Config, error) {
 }
 
 func (cfg *config_impl) LoadJsonFile(file string) (Config, error) {
-	if in, err := misc.ReadFileAll(file); err != nil {
+	if in, err := ioutil.ReadFile(file); err != nil {
 		return nil, err
 	} else {
 		return cfg.LoadJson(in)
@@ -134,7 +135,7 @@ func (cfg *config_impl) LoadIni(in []byte, key_preprocess ...func(string) string
 }
 
 func (cfg *config_impl) LoadIniFile(file string, key_preprocess ...func(string) string) (Config, error) {
-	if in, err := misc.ReadFileAll(file); err != nil {
+	if in, err := ioutil.ReadFile(file); err != nil {
 		return nil, err
 	} else {
 		return cfg.LoadIni(in, key_preprocess...)
