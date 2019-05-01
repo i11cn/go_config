@@ -8,6 +8,8 @@ import (
 	"regexp"
 	"strings"
 
+	misc "github.com/i11cn/go_misc"
+
 	option "github.com/i11cn/go_opt"
 	"gopkg.in/yaml.v2"
 )
@@ -80,7 +82,7 @@ func (cfg *config_impl) LoadYaml(in []byte) (Config, error) {
 }
 
 func (cfg *config_impl) LoadYamlFile(file string) (Config, error) {
-	if in, err := read_file_all(file); err != nil {
+	if in, err := misc.ReadFileAll(file); err != nil {
 		return nil, err
 	} else {
 		return cfg.LoadYaml(in)
@@ -99,7 +101,7 @@ func (cfg *config_impl) LoadJson(in []byte) (Config, error) {
 }
 
 func (cfg *config_impl) LoadJsonFile(file string) (Config, error) {
-	if in, err := read_file_all(file); err != nil {
+	if in, err := misc.ReadFileAll(file); err != nil {
 		return nil, err
 	} else {
 		return cfg.LoadJson(in)
@@ -132,7 +134,7 @@ func (cfg *config_impl) LoadIni(in []byte, key_preprocess ...func(string) string
 }
 
 func (cfg *config_impl) LoadIniFile(file string, key_preprocess ...func(string) string) (Config, error) {
-	if in, err := read_file_all(file); err != nil {
+	if in, err := misc.ReadFileAll(file); err != nil {
 		return nil, err
 	} else {
 		return cfg.LoadIni(in, key_preprocess...)
@@ -180,11 +182,11 @@ func (cfg *config_impl) Get(v interface{}, path ...string) error {
 		}
 		// TODO: 如果源数据是string，通过StringConverter转换
 		if i.Type().String() == "string" {
-			use := StringConverter(i.String())
+			use := misc.StringConverter(i.String())
 			if res, err := use.ToType(v.Type()); err != nil {
 				return fmt.Errorf("配置项 \"%s\" 不能转换成 %s", i.String(), v.Type().String())
 			} else {
-				v.Set(*res)
+				v.Set(res)
 			}
 			return nil
 		}
