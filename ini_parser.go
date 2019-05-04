@@ -50,7 +50,7 @@ func load_ini(io *bufio.Reader) (map[string]string, error) {
 		if len(l) > 0 {
 			line := strings.TrimSpace(string(l))
 			switch {
-			case len(line) == 0:
+			case line == "":
 
 			case is_sector(line):
 				sec = get_sector(line)
