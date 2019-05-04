@@ -56,7 +56,7 @@ func regular_path(path string, mpath ...string) []string {
 	ret := make([]string, 0, len(use))
 	for _, p := range use {
 		s := strings.TrimSpace(p)
-		if len(s) > 0 {
+		if s != "" {
 			ret = append(ret, s)
 		}
 	}
@@ -136,7 +136,7 @@ func get_keys(obj interface{}, prefix string) []string {
 			if m, ok := i.(map[string]interface{}); ok {
 				for k, v := range m {
 					key := k
-					if len(prefix) > 0 {
+					if prefix != "" {
 						key = fmt.Sprintf("%s.%s", prefix, k)
 					}
 					ret = append(ret, get_keys(v, key)...)
@@ -146,7 +146,7 @@ func get_keys(obj interface{}, prefix string) []string {
 	case map[string]interface{}:
 		for k, v := range t {
 			key := k
-			if len(prefix) > 0 {
+			if prefix != "" {
 				key = fmt.Sprintf("%s.%s", prefix, k)
 			}
 			ret = append(ret, get_keys(v, key)...)
